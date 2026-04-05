@@ -104,6 +104,28 @@ img {
     align-items: center;
 }
 
+#back-nav-btn {
+    margin-right: 1rem;
+    padding: 0.5rem;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+}
+
+#back-nav-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    transform: translateX(-3px);
+}
+
+.back-btn-hidden {
+    display: none !important;
+}
+
 .logo {
     font-size: 1.5rem;
     font-weight: 800;

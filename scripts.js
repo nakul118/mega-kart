@@ -14,6 +14,7 @@ const productsPerPage = 16;
 const mainContent = document.getElementById('main-content');
 const cartCount = document.getElementById('cart-count');
 const darkModeToggle = document.getElementById('dark-mode-toggle');
+const backNavBtn = document.getElementById('back-nav-btn');
 const loadingSpinner = document.getElementById('loading-spinner');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
@@ -40,7 +41,85 @@ document.addEventListener('DOMContentLoaded', () => {
     generateProducts(); 
     updateCartCount();
     setupNavigation();
+    setupGestures();
 });
+
+function setupGestures() {
+    let horizontalScroll = 0;
+    let gestureCooldown = false;
+
+    // Detect horizontal swipes from touchpad (using wheel event deltaX)
+    window.addEventListener('wheel', (e) => {
+        if (gestureCooldown) return;
+
+        // Check if movement is primarily horizontal (swipe left-to-right to go back)
+        if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && e.deltaX < -50) {
+            handleBackGesture();
+            
+            // Prevent spamming
+            gestureCooldown = true;
+            setTimeout(() => { gestureCooldown = false; }, 800);
+        }
+    }, { passive: true });
+
+    // Also support touch swipe gestures for screens/touchpads that emulate touch
+    let touchStartX = 0;
+    window.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+        const touchEndX = e.changedTouches[0].clientX;
+        const diffX = touchEndX - touchStartX;
+
+        if (diffX > 100) { // Swipe right to go back
+            handleBackGesture();
+        }
+    }, { passive: true });
+}
+
+function handleBackGesture() {
+    // Determine which view we are currently in and navigate back accordingly
+    const currentView = mainContent.querySelector('.animate-up > div, .animate-up > section')?.className || '';
+    
+    // If in product details or cart/checkout, go back to product list/home
+    if (mainContent.querySelector('.product-details') || 
+        mainContent.querySelector('.cart-container') || 
+        mainContent.querySelector('.checkout-container') ||
+        mainContent.querySelector('.success-page')) {
+        
+        showToast("Navigating back...");
+        renderProducts(allProducts);
+        window.scrollTo(0, 0);
+    } else if (searchQuery) {
+        // Clear search
+        showToast("Clearing search");
+        searchQuery = '';
+        searchInput.value = '';
+        renderProducts(allProducts);
+        window.scrollTo(0, 0);
+    } else if (mainContent.querySelector('.product-grid') && currentCategory !== 'All') {
+        // If in a specific category, go back to home/all products
+        showToast("Back to Home");
+        currentCategory = 'All';
+        renderProducts(allProducts);
+        window.scrollTo(0, 0);
+    }
+}
+
+function updateBackButtonVisibility() {
+    if (!backNavBtn) return;
+    
+    const isHome = mainContent.querySelector('.hero') !== null;
+    const isCategoryAll = currentCategory === 'All' && mainContent.querySelector('.product-grid') !== null;
+    
+    // Show back button if NOT on home page AND NOT on "All Products" grid
+    if (isHome || (isCategoryAll && !searchQuery)) {
+        backNavBtn.classList.add('back-btn-hidden');
+    } else {
+        backNavBtn.classList.remove('back-btn-hidden');
+    }
+}
 
 function initTheme() {
     const savedTheme = localStorage.getItem('theme') || 'light';
@@ -83,6 +162,14 @@ function setupNavigation() {
         }
     });
 
+    if (backNavBtn) {
+        backNavBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleBackGesture();
+        });
+    }
+
     searchBtn.addEventListener('click', (e) => { e.stopPropagation(); handleSearch(); });
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') { e.stopPropagation(); handleSearch(); }
@@ -101,6 +188,7 @@ function handleSearch() {
     } else {
         renderProducts(allProducts);
     }
+    updateBackButtonVisibility();
 }
 
 function generateProducts() {
@@ -132,10 +220,21 @@ function generateProducts() {
     categories.forEach(cat => {
         const images = categoryMapping[cat];
         for (let i = 1; i <= 5; i++) {
+            let price;
+            if (['Chips', 'Coldrink', 'Magy', 'Fruits'].includes(cat)) {
+                // Price under 100 (e.g., 10 to 99)
+                price = Math.floor(Math.random() * 90) + 10;
+            } else if (['Cloth', 'Electronics'].includes(cat)) {
+                // Price under 1000 (e.g., 100 to 999)
+                price = Math.floor(Math.random() * 900) + 100;
+            } else {
+                price = Math.floor(Math.random() * 2000) + 50;
+            }
+            
             allProducts.push({
                 id: idCounter++,
                 title: `${cat} Premium ${i}`,
-                price: Math.floor(Math.random() * 2000) + 50,
+                price: price,
                 description: `Authentic ${cat.toLowerCase()} with quality guaranteed.`,
                 category: cat,
                 categoryDesc: categoryInfo[cat],
@@ -152,6 +251,12 @@ function generateProducts() {
 }
 
 function renderHome() {
+    // Reset state
+    currentCategory = 'All';
+    searchQuery = '';
+    searchInput.value = '';
+    currentPage = 1;
+
     // Mixed home page
     const featured = allProducts.slice(0, 4);
     mainContent.innerHTML = `
@@ -187,6 +292,8 @@ function renderHome() {
         currentPage = 1;
         renderProducts(allProducts);
     });
+
+    updateBackButtonVisibility();
 }
 
 function renderProducts(products, title = 'All Products') {
@@ -236,6 +343,8 @@ function renderProducts(products, title = 'All Products') {
             : allProducts.filter(p => p.category === currentCategory);
         renderProducts(filtered, currentCategory);
     });
+
+    updateBackButtonVisibility();
 }
 
 function renderPagination(totalPages, products) {
@@ -306,8 +415,9 @@ function renderProductDetails(id) {
     `;
 
     document.getElementById('details-add-btn').addEventListener('click', (e) => { e.stopPropagation(); addToCart(product); });
-    document.getElementById('back-btn').addEventListener('click', (e) => { e.stopPropagation(); renderProducts(allProducts); });
+    document.getElementById('back-btn').addEventListener('click', (e) => { e.stopPropagation(); handleBackGesture(); });
     showSpinner(false);
+    updateBackButtonVisibility();
 }
 
 // Cart Logic
@@ -362,6 +472,7 @@ function renderCart() {
             </div>
         `;
         document.getElementById('start-shopping').addEventListener('click', (e) => { e.stopPropagation(); renderProducts(allProducts); });
+        updateBackButtonVisibility();
         return;
     }
 
@@ -409,6 +520,7 @@ function renderCart() {
     `;
 
     document.getElementById('checkout-btn').addEventListener('click', (e) => { e.stopPropagation(); renderCheckout(); });
+    updateBackButtonVisibility();
 }
 
 function renderCheckout() {
@@ -474,7 +586,9 @@ function renderCheckout() {
                 <a href="#" class="btn" onclick="renderHome()">Back to Home</a>
             </div>
         `;
+        updateBackButtonVisibility();
     });
+    updateBackButtonVisibility();
 }
 
 // UI Helpers
